@@ -1,0 +1,324 @@
+﻿<#+
+void WriteDbBoolSupport(ComplexType complex)
+    {
+        CodeGenerationTools code = new CodeGenerationTools(this);
+        if (code.Escape(complex) == "DbBool")
+        {
+#>
+
+    #region static methods
+
+	public static string Transform(bool value)
+	{
+		return value ? "Y" : "N";
+	}
+
+	public static bool Transform(string value)
+	{
+		if (value == null) throw new ArgumentNullException();
+
+		return value == "Y" ? true : false;
+	}
+
+	#endregion static methods
+
+	#region operators implementation
+
+	public static bool operator !(DbBool dbBool)
+	{
+		return !(bool)dbBool;
+	}
+
+	public static implicit operator bool(DbBool dbBool)
+	{
+		return Transform(dbBool.Value);
+	}
+
+	public static implicit operator bool?(DbBool dbBool)
+	{
+		if (!string.IsNullOrEmpty(dbBool.Value)) return null;
+
+		return Transform(dbBool.Value);
+	}
+
+	public static implicit operator DbBool(bool value)
+	{
+		return new DbBool { Value = Transform(value) };
+	}
+
+	public static implicit operator DbBool(bool? value)
+	{
+		if (!value.HasValue) return new DbBool { Value = null };
+		return new DbBool { Value = Transform(value.Value) };
+	}
+
+	public static bool operator ==(DbBool a, bool b)
+	{
+		return (a.Value == Transform(b));
+	}
+
+	public static bool operator !=(DbBool a, bool b)
+	{
+		return (a.Value != Transform(b));
+	}
+
+	public static bool operator ==(bool a, DbBool b)
+	{
+		return (Transform(a) == b.Value);
+	}
+
+	public static bool operator !=(bool a, DbBool b)
+	{
+		return (Transform(a) != b.Value);
+	}
+
+	public static bool operator ==(DbBool a, DbBool b)
+	{
+		if (a == null && b == null) return true;
+
+		if (a == null || b == null) return false;
+
+		return a.Equals(b);
+	}
+
+	public static bool operator !=(DbBool a, DbBool b)
+	{
+		return !(a == b);
+	}
+
+	#endregion operators implementation
+
+	#region overriden methods
+
+	public override string ToString()
+	{
+		if (string.IsNullOrEmpty(this.Value)) return this.Value;
+		return ((bool)this).ToString();
+	}
+
+	public override bool Equals(object obj)
+	{
+		DbBool dbBool = obj as DbBool;
+
+		if (dbBool == null) return false;
+
+		return Value.Equals(dbBool.Value);
+	}
+
+	public override int GetHashCode()
+	{
+		return Value.GetHashCode();
+	}
+
+	#endregion noverriden methods
+<#+
+        }
+    }
+
+    void WriteEnumSupport(ComplexType complex)
+    {
+        XElement dbEnumElement = FindDbEnumAttribute(complex);
+        if (dbEnumElement != null)
+        {
+            CodeGenerationTools code = new CodeGenerationTools(this);
+            string complexName = code.Escape(complex);
+            string targetEnumType = GetTargetEnumType(dbEnumElement);
+
+            EdmProperty valueProperty = complex.Properties.Where(p => p.TypeUsage.EdmType is PrimitiveType && p.DeclaringType == complex)
+                .Single(p => code.Escape(p) == "Value");
+            string valuePropertyType = code.Escape(valueProperty.TypeUsage);
+#>
+
+	#region static methods
+<#+
+            if (valuePropertyType == "string")
+            {
+#>
+
+	public static string Transform(<#=targetEnumType#>? value)
+	{
+		if (!value.HasValue) return null;
+		return (string)EnumMapping.TranslateFromEnum(typeof(<#=targetEnumType#>), value.Value);
+	}
+
+	public static <#=targetEnumType#>? Transform(string value)
+	{
+		if (string.IsNullOrEmpty(value)) return null;
+		return (<#=targetEnumType#>)EnumMapping.TranslateToEnum(typeof(<#=targetEnumType#>), value);
+	}
+<#+
+            }
+            else
+            {
+                MetadataTools ef = new MetadataTools(this);
+                bool isNullable = ef.IsNullable(valueProperty);
+#>
+    public static <#=valuePropertyType#> Transform(<#=targetEnumType#>? value)
+    {
+        <#=isNullable ? "if (!value.HasValue) return null;" : ""#>
+        return (<#=valuePropertyType#>)EnumMapping.TranslateFromEnum(typeof(<#=targetEnumType#>), value.Value);
+    }
+
+    public static <#=targetEnumType#>? Transform(<#=valuePropertyType#> value)
+    {
+        <#=isNullable ? "if (!value.HasValue) return null;" : ""#>
+        return (<#=targetEnumType#>)EnumMapping.TranslateToEnum(typeof(<#=targetEnumType#>), value);
+    }
+<#+
+            }
+#>
+
+	#endregion static methods
+
+	#region operators implementation
+
+	public static implicit operator <#=targetEnumType#>(<#=complexName#> dbEnum)
+	{
+		return Transform(dbEnum.Value).Value;
+	}
+
+	public static implicit operator <#=targetEnumType#>?(<#=complexName#> dbEnum)
+	{
+		return Transform(dbEnum.Value);
+	}
+
+	public static implicit operator <#=complexName#>(<#=valuePropertyType#> value)
+	{
+		return new <#=complexName#> { Value = value };
+	}
+
+	public static implicit operator <#=complexName#>(<#=targetEnumType#> value)
+	{
+		return new <#=complexName#> { Value = Transform(value) };
+	}
+
+	public static implicit operator <#=complexName#>(<#=targetEnumType#>? value)
+	{
+		return new <#=complexName#> { Value = Transform(value.Value) };
+	}
+
+	public static bool operator ==(<#=complexName#> a, <#=targetEnumType#> b)
+	{
+		return (a.Value == Transform(b));
+	}
+
+	public static bool operator !=(<#=complexName#> a, <#=targetEnumType#> b)
+	{
+		return (a.Value != Transform(b));
+	}
+
+	public static bool operator ==(<#=targetEnumType#> a, <#=complexName#> b)
+	{
+		return (Transform(a) == b.Value);
+	}
+
+	public static bool operator !=(<#=targetEnumType#> a, <#=complexName#> b)
+	{
+		return (Transform(a) != b.Value);
+	}
+
+	public static bool operator ==(<#=complexName#> a, <#=complexName#> b)
+	{
+		if (a == null && b == null) return true;
+
+		if (a == null || b == null) return false;
+
+		return a.Equals(b);
+	}
+
+	public static bool operator !=(<#=complexName#> a, <#=complexName#> b)
+	{
+		return !(a == b);
+	}
+
+	#endregion operators implementation
+
+	#region overriden methods
+
+	public override string ToString()
+	{
+		return this.Value.ToString();
+	}
+
+	public override bool Equals(object obj)
+	{
+		<#=complexName#> dbEnum = obj as <#=complexName#>;
+
+		if (dbEnum == null) return false;
+
+		return Value.Equals(dbEnum.Value);
+	}
+
+	public override int GetHashCode()
+	{
+		return Value.GetHashCode();
+	}
+
+	#endregion overriden methods
+<#+
+        }
+
+    }
+
+    List<XElement> GetEDAttributes(EdmType edmProperty)
+    {
+        List<XElement> attributes = new List<XElement>();
+
+        foreach (MetadataProperty metadataProperty in edmProperty.MetadataProperties)
+        {
+            if (metadataProperty.Name == "http://devart.com/schemas/EntityDeveloper/1.0:Attributes")
+            {
+                XElement attributesElement = (XElement)metadataProperty.Value;
+                
+                foreach (XNode attributeNode in attributesElement.Nodes())
+                {
+                    XElement attributeElement = attributeNode as XElement;
+
+                    if (attributeElement == null) continue;
+
+                    attributes.Add(attributeElement);
+                }
+            }
+        }
+
+        return attributes;
+    }
+
+    XElement FindDbEnumAttribute(EdmType complex)
+    {
+        List<XElement> attributeList = GetEDAttributes(complex);
+
+        XElement dbEnumAttribute = attributeList.SingleOrDefault(x => x.Attributes().Any(y => y.Name.ToString() == "Name" &&
+            y.Value == "EFExtensions.DbEnumAttribute"));
+
+        return dbEnumAttribute;
+    }
+
+    string GetTargetEnumType(XElement attributeElement)
+    {
+        XElement propertiesElement = attributeElement.Nodes().Single(x => (x as XElement).Name.LocalName == "Properties") as XElement;
+        XElement targetEnumTypeElement = propertiesElement.Nodes().Single(x => (x as XElement).Attributes()
+            .Any(y => y.Name.ToString() == "Name" & y.Value == "TargetEnumType")) as XElement;
+        return targetEnumTypeElement.Value;
+    }
+
+    string GetDbEnumInterface(EdmType complex)
+    {
+        List<XElement> attributeList = GetEDAttributes(complex);
+        
+        XElement dbEnumAttribute = attributeList.SingleOrDefault(x => x.Attributes().Any(y => y.Name.ToString() == "Name" &&
+            y.Value == "EFExtensions.DbEnumAttribute"));
+        if (dbEnumAttribute != null) return "IDbEnum";
+        return "";
+    }
+
+    bool CheckDbEnum(EdmType complex)
+    {
+        List<XElement> attributeList = GetEDAttributes(complex);
+        
+        XElement dbEnumAttribute = attributeList.SingleOrDefault(x => x.Attributes().Any(y => y.Name.ToString() == "Name" &&
+            y.Value == "EFExtensions.DbEnumAttribute"));
+
+        return dbEnumAttribute != null;
+    }
+#>
